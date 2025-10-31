@@ -5,6 +5,12 @@ description = "Hybrid RAG"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "langchain-community>=0.3.31",
+    "langchain-docling>=1.1.0",
+    "matplotlib>=3.10.7",
+    "networkx>=3.4.2",
+    "numpy>=2.2.6",
+    "plotly>=6.3.1",
     "requests>=2.32.5",
     "simplejson>=3.20.2",
 ]
