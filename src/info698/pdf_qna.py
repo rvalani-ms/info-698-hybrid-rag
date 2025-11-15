@@ -11,15 +11,20 @@ from .embedding import CustomEmbeddings
 from .graph_builder import GraphRetrival
 from typing import List, Dict
 from collections import defaultdict
+from langchain_ollama import ChatOllama
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+import simplejson as json
 
 clean_title = lambda x : x.split("#")[2].strip()
 
 
 
 class PDFQnA:
-    def __init__(self, chunk_size: int = 4000, chunk_overlap: int = 100):
+    def __init__(self, model="llama3.2:3b", chunk_size: int = 4000, chunk_overlap: int = 100):
                 # Initialize embedding model with consistent dimensions
         # Use all-MiniLM-L6-v2 (384 dims) to match existing collections
+        self.llm = ChatOllama(model=model, temperature=0.3)
         try:
             self.embedding_model = CustomEmbeddings(model_name="all-MiniLM-L6-v2")
             print("✅ Using all-MiniLM-L6-v2 (384 dimensions) for consistency")
@@ -79,6 +84,9 @@ class PDFQnA:
         graph_retrival = GraphRetrival()
 
         self.retrieval_cache = {}
+        
+        # Setup QA chain
+        self.qa_chain = self._setup_qa_chain()
  
     def load_documents_from_dir(self, directory: str):
         # Load documents from the specified directory
@@ -179,9 +187,52 @@ class PDFQnA:
 
     def expand_query(self, query: str) -> List[str]:
         """Expand query using LLM paraphrases with embedding-based filtering."""
-        # Pending LLM integration
-        return [query]
+        variants: List[str] = [query]
+        try:
 
+            prompt = ChatPromptTemplate.from_template(
+                "Generate up to 4 concise paraphrases or closely related query variants for: '{q}'.\n"
+                "Return a JSON array of strings only."
+            )
+            chain = prompt | self.llm | StrOutputParser()
+            raw = chain.invoke({"q": query})
+            try:
+                candidates = json.loads(raw)
+                if not isinstance(candidates, list):
+                    candidates = [str(raw).strip()]
+            except Exception:
+                candidates = [l.strip("- *\n ") for l in str(raw).splitlines() if l.strip()]
+            base_emb = None
+            try:
+                base_emb = np.array(self.embedding_model.embed_query(query), dtype=float)
+            except Exception:
+                base_emb = None
+            kept = []
+            seen = {query.strip().lower()}
+            for c in candidates:
+                if not isinstance(c, str):
+                    continue
+                s = c.strip()
+                if not s or s.lower() in seen or len(s) < 3:
+                    continue
+                if base_emb is not None:
+                    try:
+                        emb = np.array(self.embedding_model.embed_query(s), dtype=float)
+                        sim = float(cosine_similarity([base_emb], [emb])[0][0])
+                        if sim < 0.6 or sim > 0.98:
+                            continue
+                    except Exception:
+                        pass
+                kept.append(s)
+                seen.add(s.lower())
+                if len(kept) >= 4:
+                    break
+            variants.extend(kept)
+        except Exception:
+            print("DEBUG: Unable to expand query, returning, initial query.")
+        print("DEBUG : variants", variants)
+        return variants
+    
     def _rank_with_diversity(self, results: List[Dict], top_n: int) -> List[Dict]:
         """Rank results with diversity consideration."""
         # Sort by relevance score
@@ -413,7 +464,28 @@ class PDFQnA:
 
         return rendered
 
-
+    def _setup_qa_chain(self, root_title="Attention is All You Need"):
+        prompt = ChatPromptTemplate.from_messages([
+            ("system", (
+                "You are a precise research assistant. Answer strictly using the provided context. "
+                "If the context is insufficient, say you don't know.\n\n"
+                "Requirements:\n"
+                "- Prefer concise bullet points (3–5).\n"
+                "- Include inline citations using the form [Title, Year] when available.\n"
+                "- Do not fabricate facts or citations.\n\n"
+                "<context>\n{context}\n</context>"
+            )),
+            ("human", "{question}")
+        ])
+        
+        chain = (
+            {"context": lambda x: x["context"], "question": lambda x: x["question"]}
+            | prompt
+            | self.llm
+            | StrOutputParser()
+        )
+        return chain
+    
     def ask_question(self, question: str, use_best_first: bool = False):
         if not self.vectorstore:
             raise Exception("No documents in the vectorstore.")
