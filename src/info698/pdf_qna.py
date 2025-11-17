@@ -81,7 +81,7 @@ class PDFQnA:
         # Initialize tracking attributes
         self.processed_pdfs = set()
 
-        graph_retrival = GraphRetrival()
+        self.graph_retrival = GraphRetrival()
 
         self.retrieval_cache = {}
         
@@ -344,6 +344,8 @@ class PDFQnA:
         
         return sorted(results, key=lambda x: x["relevance_score"], reverse=True)
 
+<<<<<<< HEAD
+=======
     def _query_personalized_paths(self, question: str, top_k: int = 3):
         """Compute query-aware citation paths using personalized PageRank and shortest paths.
         Returns a list of human-readable path strings with edge labels and weights.
@@ -463,6 +465,7 @@ class PDFQnA:
             rendered.append("".join(hops))
 
         return rendered
+>>>>>>> 870abe026e25bbf017f333e5d7fff937d0312c2c
 
     def _setup_qa_chain(self, root_title="Attention is All You Need"):
         prompt = ChatPromptTemplate.from_messages([
@@ -550,7 +553,7 @@ class PDFQnA:
         #         print(f"Best-first retrieval failed, falling back to advanced retrieval: {e}")
         #         graph_results = self.advanced_graph_retrieval(question, top_k=5, max_hops=3)
         # else:
-        graph_results = self.advanced_graph_retrieval(question, top_k=5, max_hops=3)
+        graph_results = self.graph_retrieval.advanced_graph_retrieval(question, top_k=5, max_hops=3)
         query_embedding = self.embedding_model.embed_query(question)
         
         #  fusion with better weighting
@@ -560,8 +563,88 @@ class PDFQnA:
         
         # Re-rank results
         fused_results = self.rerank_results(fused_results, question)
+    
+        # Prepare context for LLM with better formatting
+        context_parts = []
+        for i, res in enumerate(fused_results[:5]):
+            source = res["source"]
+            content = res["content"]
+            metadata = res["metadata"]
+            
+            if source == "vector_db":
+                title = metadata.get("title") or metadata.get("source") or "Document"
+                year = metadata.get("publication_year")
+                header = f"Title: {title}"
+                if isinstance(year, (int, float)):
+                    header += f" ({int(year)})"
+                context_parts.append(f"{header}\nSnippet: {content}")
+            else:
+                title = res["content"].replace("Title: ", "")
+                year = metadata.get("publication_year") if isinstance(metadata, dict) else None
+                cited = metadata.get("cited_by_count") if isinstance(metadata, dict) else None
+                suffix = []
+                if isinstance(year, (int, float)):
+                    suffix.append(str(int(year)))
+                if isinstance(cited, (int, float)):
+                    suffix.append(f"citations: {int(cited)}")
+                extra = f" ({', '.join(suffix)})" if suffix else ""
+                context_parts.append(f"Paper {i+1}: {title}{extra}")
         
-     
+        context = "\n\n".join(context_parts)
+        
+        # Enhanced citation path
+        citation_path = []
+        # Build query-personalized citation paths for explainability
+        citation_path = self.graph_retrieval._query_personalized_paths(question, top_k=3)
+
+        # Generate answer with better prompt
+        response = self.qa_chain.invoke({
+            "question": question, 
+            "context": context
+        })
+        
+        # Enhanced confidence calculation
+        vector_scores = [res["relevance_score"] for res in fused_results if res["source"] == "vector_db"]
+        graph_scores = [res["relevance_score"] for res in fused_results if res["source"] == "citation_graph"]
+        
+        avg_vector_score = np.mean(vector_scores) if vector_scores else 0.5
+        avg_graph_score = np.mean(graph_scores) if graph_scores else 0.5
+        
+        # Weighted confidence with diversity bonus
+        diversity_bonus = 0.1 if len(set([res["source"] for res in fused_results])) > 1 else 0
+        confidence = 0.5 * avg_vector_score + 0.4 * avg_graph_score + 0.1 * diversity_bonus
+        confidence = min(1.0, confidence)
+        
+        # Build retrieved_chunks ensuring at least 2 items are shown
+        retrieved_chunks = [
+            {"content": res["content"], "metadata": res["metadata"], "score": res["relevance_score"]}
+            for res in fused_results if res["source"] == "vector_db"
+        ]
+        if len(retrieved_chunks) < 2:
+            needed = 2 - len(retrieved_chunks)
+            for res in [r for r in fused_results if r["source"] == "citation_graph"][:needed]:
+                retrieved_chunks.append({
+                    "content": res["content"],
+                    "metadata": res["metadata"],
+                    "score": res["relevance_score"]
+                })
+
+        # Cache the result
+        result = {
+            "answer": response,
+            "explanation": {
+                "retrieved_chunks": retrieved_chunks,
+                "citation_path": citation_path,
+                "confidence": round(confidence, 2),
+                "retrieval_stats": {
+                    "vector_results": len(vector_scores),
+                    "graph_results": len(graph_scores),
+                    "total_results": len(fused_results)
+                }
+            }
+        }
+        self.retrieval_cache[cache_key] = result
+        return result
 
 if __name__ == "__main__":
 
