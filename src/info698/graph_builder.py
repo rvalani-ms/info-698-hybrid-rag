@@ -471,7 +471,7 @@ class GraphRetrival:
         
         return expanded_results[:top_k * 2]  # Return more results for better fusion
 
-   def _query_personalized_paths(self, question: str, top_k: int = 3):
+    def _query_personalized_paths(self, question: str, top_k: int = 3):
         """Compute query-aware citation paths using personalized PageRank and shortest paths.
         Returns a list of human-readable path strings with edge labels and weights.
         """

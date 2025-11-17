@@ -5,9 +5,11 @@ description = "Hybrid RAG"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "arize-phoenix>=12.16.0",
     "langchain-chroma>=0.2.6",
     "langchain-community>=0.3.31",
     "langchain-docling>=1.1.0",
+    "langchain-ollama>=0.3.10",
     "matplotlib>=3.10.7",
     "networkx>=3.4.2",
     "numpy>=2.2.6",
