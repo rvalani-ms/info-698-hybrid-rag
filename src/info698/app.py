@@ -2,9 +2,7 @@ import streamlit as st
 import os
 from pdf_qna import PDFQuestionAnswering
 from graph_builder import extract_id
-import plotly
 import plotly.express as px
-import json
 import traceback
 
 # Streamlit page configuration
@@ -131,38 +129,3 @@ if submit_button and query:
                 st.markdown("**Stack Trace** (for debugging):")
                 st.code(traceback.format_exc())
 
-    if st.session_state.pdf_qa is None or not st.session_state.papers_loaded:
-        st.error("Load PDFs first to run evaluation.")
-    else:
-        with st.status("Running evaluation..."):
-            try:
-                evaluator = HybridRAGEvaluator(st.session_state.pdf_qa)
-                test_queries = [q.strip() for q in queries_text.split("\n") if q.strip()]
-                if not test_queries:
-                    test_queries = default_queries
-                results = evaluator.run_comprehensive_evaluation(test_queries)
-                st.subheader("Evaluation Summary")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Overall Score", f"{results['overall_score']:.3f}")
-                    st.metric("Avg Confidence", f"{results['retrieval_performance']['avg_confidence']:.3f}")
-                with col2:
-                    st.metric("Avg Retrieval Time", f"{results['retrieval_performance']['avg_retrieval_time']:.3f}s")
-                    st.metric("Avg Diversity", f"{results['retrieval_performance']['avg_diversity']:.3f}")
-                with col3:
-                    st.metric("Fusion Improvement", f"{results['fusion_effectiveness']['avg_improvement']:.3f}")
-                    st.metric("Avg Vector Score", f"{results['fusion_effectiveness']['avg_vector_score']:.3f}")
-                st.markdown("---")
-                st.markdown("**Graph Statistics**")
-                gs = results['graph_quality']['graph_analysis']
-                gcol1, gcol2, gcol3, gcol4 = st.columns(4)
-                with gcol1:
-                    st.metric("Nodes", gs.get('nodes', 0))
-                with gcol2:
-                    st.metric("Edges", gs.get('edges', 0))
-                with gcol3:
-                    st.metric("Density", f"{gs.get('density', 0):.3f}")
-                with gcol4:
-                    st.metric("Modularity", f"{gs.get('modularity', 0):.3f}")
-            except Exception as e:
-                st.error(f"Evaluation failed: {str(e)}")

@@ -331,18 +331,53 @@ class PDFQnA:
 
     def rerank_results(self, results: List[Dict], query: str) -> List[Dict]:
         """Re-rank results using cross-encoder or other methods."""
-        # Simple re-ranking based on multiple factors
-        for result in results:
-            # Boost score for exact matches
-            if query.lower() in result.get("content", "").lower():
-                result["relevance_score"] *= 1.2
-            
-            # Boost score for recent papers
-            year = result.get("metadata", {}).get("publication_year")
-            if isinstance(year, (int, float)) and year > 2020:
-                result["relevance_score"] *= 1.1
-        
-        return sorted(results, key=lambda x: x["relevance_score"], reverse=True)
+        # Compute semantic similarity and apply additional signals
+        try:
+            q_emb = np.array(self.embedding_model.embed_query(query), dtype=float)
+        except Exception:
+            q_emb = None
+
+        seen_titles = set()
+        for r in results:
+            base = float(r.get("relevance_score", 0.0))
+            txt = str(r.get("content", ""))[:800]
+            sim = 0.0
+            if q_emb is not None and txt:
+                try:
+                    emb = np.array(self.embedding_model.embed_query(txt), dtype=float)
+                    na = np.linalg.norm(q_emb); nb = np.linalg.norm(emb)
+                    if na > 0 and nb > 0:
+                        sim = float(np.dot(q_emb, emb) / (na * nb))
+                except Exception:
+                    sim = 0.0
+
+            # Exact/partial match boost
+            if query.lower() in txt.lower():
+                base *= 1.15
+
+            # Recency boost
+            year = r.get("metadata", {}).get("publication_year")
+            if isinstance(year, (int, float)) and year >= 2021:
+                base *= 1.08
+
+            # Source-aware smoothing
+            src = r.get("source")
+            if src == "vector_db":
+                base = 0.8 * base + 0.2 * sim
+            else:  # citation_graph
+                base = 0.7 * base + 0.3 * sim
+
+            # Light duplicate suppression by title text
+            title_key = txt.split("\n", 1)[0].strip().lower()
+            if title_key in seen_titles and title_key:
+                base *= 0.95
+            else:
+                if title_key:
+                    seen_titles.add(title_key)
+
+            r["relevance_score"] = float(base)
+
+        return sorted(results, key=lambda x: x.get("relevance_score", 0.0), reverse=True)
 
 
     def _setup_qa_chain(self, root_title="Attention is All You Need"):
@@ -524,6 +559,79 @@ class PDFQnA:
         self.retrieval_cache[cache_key] = result
         return result
 
+    def get_system_stats(self) -> Dict[str, Any]:
+        """Get comprehensive system statistics with safe calculations."""
+        try:
+            # Safe graph statistics
+            graph_stats = {
+                "nodes": self.G.number_of_nodes(),
+                "edges": self.G.number_of_edges(),
+                "density": nx.density(self.G) if self.G.number_of_nodes() > 0 else 0.0,
+                "communities": len(self.communities) if hasattr(self, 'communities') else 0,
+                "avg_clustering": nx.average_clustering(self.G) if self.G.number_of_nodes() > 0 else 0.0
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating graph stats: {e}")
+            graph_stats = {
+                "nodes": 0,
+                "edges": 0,
+                "density": 0.0,
+                "communities": 0,
+                "avg_clustering": 0.0
+            }
+        
+        try:
+            # Safe vector statistics
+            collection_size = 0
+            if hasattr(self, 'vectorstore') and self.vectorstore:
+                if hasattr(self.vectorstore, '_collection'):
+                    try:
+                        collection_size = self.vectorstore._collection.count()
+                    except:
+                        collection_size = 0
+            
+            vector_stats = {
+                "collection_size": collection_size,
+                "processed_pdfs": len(self.processed_pdfs) if hasattr(self, 'processed_pdfs') else 0
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating vector stats: {e}")
+            vector_stats = {
+                "collection_size": 0,
+                "processed_pdfs": 0
+            }
+        
+        try:
+            # Safe cache statistics
+            cache_hits = getattr(self, 'cache_hits', 0)
+            cache_requests = getattr(self, 'cache_requests', 0)
+            
+            # Avoid division by zero
+            if cache_requests > 0:
+                cache_hit_rate = cache_hits / cache_requests
+            else:
+                cache_hit_rate = 0.0
+            
+            cache_stats = {
+                "cache_size": len(self.retrieval_cache) if hasattr(self, 'retrieval_cache') else 0,
+                "cache_hit_rate": cache_hit_rate
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating cache stats: {e}")
+            cache_stats = {
+                "cache_size": 0,
+                "cache_hit_rate": 0.0
+            }
+        
+        stats = {
+            "graph_stats": graph_stats,
+            "vector_stats": vector_stats,
+            "cache_stats": cache_stats
+        }
+        
+        return stats
+
+
 if __name__ == "__main__":
 
     # Example usage
@@ -543,3 +651,18 @@ if __name__ == "__main__":
         documents= pdf_qa.load_document(document)
 
         pdf_qa.add_documents(documents)
+
+        question = input("Enter your question: ")
+        # Ask a question
+        answer = pdf_qa.ask_question(question)
+        print(answer)
+
+        # question = input("Enter your question: ")
+        # answer = pdf_qa.ask_question(question)
+        print("Answer:", answer["answer"])
+        print("\nExplanation:")
+        print("Retrieved Chunks:")
+        for chunk in answer["explanation"]["retrieved_chunks"]:
+            print(f"- {chunk['content']} (Metadata: {chunk['metadata']})")
+        print("Citation Path:", " → ".join(answer["explanation"]["citation_path"]))
+        print(f"Confidence: {answer['explanation']['confidence']}")
