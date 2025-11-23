@@ -717,6 +717,49 @@ def main(root_id, data, root_title=None):
     # visualize_static(G, edges)
     visualize_interactive(G, edges, extract_id(root_id))
 
+def analyze_graph_structure(G: nx.DiGraph) -> Dict[str, Any]:
+    """Analyze graph structure and compute advanced metrics."""
+    analysis = {}
+    
+    # Basic metrics
+    analysis['nodes'] = G.number_of_nodes()
+    analysis['edges'] = G.number_of_edges()
+    analysis['density'] = nx.density(G)
+    analysis['is_connected'] = nx.is_weakly_connected(G)
+    
+    # Centrality measures
+    analysis['pagerank'] = nx.pagerank(G, weight='weight')
+    analysis['betweenness'] = nx.betweenness_centrality(G, weight='weight')
+    analysis['closeness'] = nx.closeness_centrality(G)
+    analysis['eigenvector'] = nx.eigenvector_centrality(G, weight='weight', max_iter=1000)
+    
+    # Community detection
+    try:
+        import networkx.algorithms.community as nx_comm
+        communities = list(nx_comm.greedy_modularity_communities(G))
+        analysis['communities'] = communities
+        analysis['modularity'] = nx_comm.modularity(G, communities)
+    except:
+        analysis['communities'] = []
+        analysis['modularity'] = 0
+    
+    # Temporal analysis
+    years = [G.nodes[node].get('publication_year') for node in G.nodes() 
+            if G.nodes[node].get('publication_year')]
+    if years:
+        analysis['year_range'] = (min(years), max(years))
+        analysis['avg_year'] = np.mean(years)
+        analysis['year_std'] = np.std(years)
+    
+    # Citation patterns
+    citation_counts = [G.nodes[node].get('cited_by_count', 0) for node in G.nodes()]
+    if citation_counts:
+        analysis['avg_citations'] = np.mean(citation_counts)
+        analysis['max_citations'] = max(citation_counts)
+        analysis['citation_std'] = np.std(citation_counts)
+    
+    return analysis
+
 
 if __name__ == "__main__":
     # paper = "Attention is all you need"
