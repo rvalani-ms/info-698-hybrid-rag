@@ -5,10 +5,14 @@ import logging
 import simplejson as json
 import time
 from typing import Dict, List, Any, Optional
-
+from urllib.parse import urlparse
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def extract_id(openalex_url):
+    """Extract the ID from an OpenAlex URL (e.g., W3159481202 from https://openalex.org/W3159481202)."""
+    return urlparse(openalex_url).path.split('/')[-1]
 
 class OpenAlexAPI:
     def __init__(self, query, max_retries: int = 3, delay: float = 1.0):
@@ -60,7 +64,7 @@ class OpenAlexAPI:
         Fetch OpenAlex IDs based on a query with enhanced parameters.
         """
         params = {
-            'search': self.query,
+            'filter': f'title.search:{self.query}',
             'page': page,
             'per-page': per_page,
             'sort': 'cited_by_count:desc'  # Sort by citation count
@@ -69,7 +73,7 @@ class OpenAlexAPI:
         logger.info(f"Searching for: {self.query}")
         response = self._make_request(self.base_url, params)
         data = response.json()
-        
+        print(data)
         if not data.get('results'):
             logger.warning(f"No results found for query: {self.query}")
             self.query_alex_repsone = None
@@ -77,6 +81,7 @@ class OpenAlexAPI:
         
         # Get the most cited result
         self.query_alex_repsone = data['results'][0]
+        self.root_id = extract_id(self.query_alex_repsone["id"])
         logger.info(f"Found paper: {self.query_alex_repsone.get('title', 'Unknown')}")
         return self.query_alex_repsone
     
@@ -92,29 +97,30 @@ class OpenAlexAPI:
             self.citation_url = None
             raise Exception(f"No OpenAlex ID found for query: {self.query}")
 
-    def query_citation_url(self, max_citations: int = 100):
+    def query_citation_url(self, max_citations: int = 15):
         """
         Fetch citation data from OpenAlex using a citation URL with pagination.
         """
-        if not self.citation_url:
-            logger.error("No citation URL available")
-            return []
+        # if not self.citation_url:
+        #     logger.error("No citation URL available")
+        #     return []
         
         all_citations = []
         page = 1
         per_page = 25
         
-        logger.info(f"Fetching citations from: {self.citation_url}")
+        logger.info(f"Fetching citations for: {self.root_id}")
         
         while len(all_citations) < max_citations:
             params = {
+                'filter' : f'cites:{self.root_id}',
                 'page': page,
                 'per-page': per_page,
                 'sort': 'cited_by_count:desc'
             }
             
             try:
-                response = self._make_request(self.citation_url, params)
+                response = self._make_request(self.base_url, params)
                 data = response.json()
                 
                 if not data.get('results'):
@@ -140,7 +146,7 @@ class OpenAlexAPI:
         logger.info(f"Total citations collected: {len(self.cites)}")
         return self.cites
 
-    def get_citations(self, max_citations: int = 100, include_abstracts: bool = False):
+    def get_citations(self, max_citations: int = 15, include_abstracts: bool = False):
         """
         Fetch citations, related works and references with enhanced data collection.
         """
@@ -152,10 +158,10 @@ class OpenAlexAPI:
                 return {}
             
             # Get citation URL
-            self.get_citation_url()
-            if not self.citation_url:
-                logger.error("Could not get citation URL")
-                return {}
+            # self.get_citation_url()
+            # if not self.citation_url:
+            #     logger.error("Could not get citation URL")
+            #     return {}
             
             # Fetch citations with pagination
             self.query_citation_url(max_citations)
@@ -296,7 +302,7 @@ if __name__ == "__main__":
             
             # Collect citations with enhanced data
             citations = openalex_api.get_citations(
-                max_citations=20,  # Limit for demo
+                max_citations=15,  # Limit for demo
                 include_abstracts=True  # Set to True if you want abstracts
             )
             
