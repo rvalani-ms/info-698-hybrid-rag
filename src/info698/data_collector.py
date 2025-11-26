@@ -296,7 +296,7 @@ if __name__ == "__main__":
             
             # Collect citations with enhanced data
             citations = openalex_api.get_citations(
-                max_citations=50,  # Limit for demo
+                max_citations=20,  # Limit for demo
                 include_abstracts=True  # Set to True if you want abstracts
             )
             

@@ -5,8 +5,9 @@ import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 from typing import List, Dict, Any
 from collections import defaultdict
-from .embedding import CustomEmbeddings
+from embedding import CustomEmbeddings
 from sklearn.metrics.pairwise import cosine_similarity
+import simplejson as json
 
 def extract_id(openalex_url):
     """Extract the ID from an OpenAlex URL (e.g., W3159481202 from https://openalex.org/W3159481202)."""
@@ -340,7 +341,7 @@ def enhanced_graph_retrieval(G: nx.DiGraph, query: str, embedding_model=None,
     return results[:top_k]
 
 
-class GraphRetrival:
+class GraphRetrieval:
     def __init__(self):
           # Initialize graph and citation data
         
@@ -348,6 +349,7 @@ class GraphRetrival:
         try:
             with open("./data/citations.json", "r") as _file:
                 self.citation_data = json.load(_file)
+                print("DEBUG : Loading citation data.")
             
             if self.citation_data and len(self.citation_data) > 0:
                 root_id = list(self.citation_data.keys())[0]
@@ -362,7 +364,7 @@ class GraphRetrival:
                     root_title=root_title,
                     embedding_model=self.embedding_model,
                 )
-                
+                self._compute_graph_metrics()
             else:
                 print("Warning: No citation data found, creating empty graph")
                 import networkx as nx
@@ -380,7 +382,37 @@ class GraphRetrival:
             self.betweenness_scores = {}
             self.communities = []
             self.temporal_scores = {}
+
+    def _compute_graph_metrics(self):
+        """Compute advanced graph metrics for better retrieval."""
+        print("Computing graph metrics...")
         
+        # Compute PageRank for all nodes
+        self.pagerank_scores = nx.pagerank(self.G, weight='weight')
+        
+        # Compute betweenness centrality
+        self.betweenness_scores = nx.betweenness_centrality(self.G, weight='weight')
+        
+        # Compute community structure
+        try:
+            import networkx.algorithms.community as nx_comm
+            self.communities = list(nx_comm.greedy_modularity_communities(self.G))
+        except:
+            self.communities = []
+        
+        # Compute temporal metrics
+        self.temporal_scores = {}
+        for node in self.G.nodes():
+            year = self.G.nodes[node].get('publication_year')
+            if year:
+                # Recent papers get higher temporal scores
+                self.temporal_scores[node] = min(1.0, (2024 - year) / 10.0)
+            else:
+                self.temporal_scores[node] = 0.5
+        
+        print(f"Graph metrics computed: {len(self.pagerank_scores)} nodes, {len(self.communities)} communities")
+
+
     def advanced_graph_retrieval(self, query: str, top_k: int = 5, max_hops: int = 3) -> List[Dict]:
         """Enhanced graph retrieval with multiple scoring factors."""
         query_embedding = self.embedding_model.embed_query(query)
@@ -585,6 +617,80 @@ class GraphRetrival:
             rendered.append("".join(hops))
 
         return rendered
+    
+    def get_system_stats(self) -> Dict[str, Any]:
+        """Get comprehensive system statistics with safe calculations."""
+        try:
+            # Safe graph statistics
+            graph_stats = {
+                "nodes": self.G.number_of_nodes(),
+                "edges": self.G.number_of_edges(),
+                "density": nx.density(self.G) if self.G.number_of_nodes() > 0 else 0.0,
+                "communities": len(self.communities) if hasattr(self, 'communities') else 0,
+                "avg_clustering": nx.average_clustering(self.G) if self.G.number_of_nodes() > 0 else 0.0
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating graph stats: {e}")
+            graph_stats = {
+                "nodes": 0,
+                "edges": 0,
+                "density": 0.0,
+                "communities": 0,
+                "avg_clustering": 0.0
+            }
+        
+        try:
+            # Safe vector statistics
+            collection_size = 0
+            if hasattr(self, 'vectorstore') and self.vectorstore:
+                if hasattr(self.vectorstore, '_collection'):
+                    try:
+                        collection_size = self.vectorstore._collection.count()
+                    except:
+                        collection_size = 0
+            
+            vector_stats = {
+                "collection_size": collection_size,
+                "processed_pdfs": len(self.processed_pdfs) if hasattr(self, 'processed_pdfs') else 0
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating vector stats: {e}")
+            vector_stats = {
+                "collection_size": 0,
+                "processed_pdfs": 0
+            }
+        
+        try:
+            # Safe cache statistics
+            cache_hits = getattr(self, 'cache_hits', 0)
+            cache_requests = getattr(self, 'cache_requests', 0)
+            
+            # Avoid division by zero
+            if cache_requests > 0:
+                cache_hit_rate = cache_hits / cache_requests
+            else:
+                cache_hit_rate = 0.0
+            
+            cache_stats = {
+                "cache_size": len(self.retrieval_cache) if hasattr(self, 'retrieval_cache') else 0,
+                "cache_hit_rate": cache_hit_rate
+            }
+        except Exception as e:
+            print(f"Warning: Error calculating cache stats: {e}")
+            cache_stats = {
+                "cache_size": 0,
+                "cache_hit_rate": 0.0
+            }
+        
+        stats = {
+            "graph_stats": graph_stats,
+            "vector_stats": vector_stats,
+            "cache_stats": cache_stats
+        }
+        
+        return stats
+
+
 
 
 def visualize_static(G, edges):
@@ -693,7 +799,9 @@ def visualize_interactive(G, edges, root_id):
                         hovermode='closest',
                         margin=dict(b=20, l=5, r=5, t=40),
                         xaxis=dict(showgrid=False, zeroline=False, showticklabels=False),
-                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False)
+                        yaxis=dict(showgrid=False, zeroline=False, showticklabels=False), 
+                        height=1200, 
+                        width=800
                     ))
 
     # fig.show()

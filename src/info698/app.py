@@ -1,11 +1,10 @@
 import streamlit as st
 import os
-from pdf_qna import PDFQuestionAnswering
-from graph_builder import extract_id
+from pdf_qna import PDFQnA
 import plotly.express as px
 import traceback
-from graph_builder import visualize_interactive, extract_id, analyze_graph_structure, find_influential_papers, find_temporal_trends
-
+from graph_builder import visualize_interactive, analyze_graph_structure, find_influential_papers, find_temporal_trends, extract_id
+import simplejson as json
 # Streamlit page configuration
 st.set_page_config(page_title="Hybrid RAG Citation Graph Assistant", layout="wide")
 
@@ -42,8 +41,8 @@ if uploaded_files:
         try:
             # Initialize PDFQuestionAnswering if not already done
             if st.session_state.pdf_qa is None:
-                st.session_state.pdf_qa = PDFQuestionAnswering(chunk_size=4000, chunk_overlap=300)
-            
+                st.session_state.pdf_qa = PDFQnA(chunk_size=5000, chunk_overlap=300)
+                
             # Process each uploaded PDF only if not already processed
             for uploaded_file in uploaded_files:
                 file_name = uploaded_file.name
@@ -65,6 +64,34 @@ if uploaded_files:
                 else:
                     st.write(f"Skipping {file_name} (already processed)")
             
+            try:
+
+                        # Try to find root node in the graph
+                if st.session_state.citation_graph is not None:
+                    root_nodes = [n for n, d in st.session_state.citation_graph.nodes(data=True) if d.get('is_root')]
+                    if root_nodes:
+                        st.session_state.root_id = root_nodes[0]
+                        st.session_state.graph_edges = list(st.session_state.citation_graph.edges())
+                        print(f"Found root node in graph: {st.session_state.root_id}")
+
+                else:
+
+                    with open("./data/citations.json", "r") as f:
+                        citation_data = json.load(f)
+                    
+                    st.session_state.citation_graph = st.session_state.pdf_qa.graph_retrieval.G
+                    
+                    if citation_data:
+                        root_id = list(citation_data.keys())[0]
+                        # if root_id and root_id != '_metadata' and root_id != '_collection_metadata':
+                        if root_id:
+                            st.session_state.root_id = extract_id(root_id)
+                            st.session_state.citation_graph = st.session_state.pdf_qa.graph_retrieval.G
+                            st.session_state.graph_edges = list(st.session_state.pdf_qa.graph_retrieval.G.edges())
+            except (FileNotFoundError, json.JSONDecodeError) as e:
+                print(f"Could not load citation data: {e}")
+            
+            st.session_state.graph_edges = list(st.session_state.pdf_qa.graph_retrieval.G.edges())
             st.session_state.papers_loaded = True
             st.success("All new PDFs processed successfully!")
         except Exception as e:
@@ -143,7 +170,7 @@ if submit_button and query:
 if st.session_state.pdf_qa is not None:
     st.subheader("System Statistics")
     try:
-        stats = st.session_state.pdf_qa.get_system_stats()
+        stats = st.session_state.pdf_qa.graph_retrieval.get_system_stats()
         
         # Graph statistics
         col1, col2, col3, col4 = st.columns(4)
@@ -174,6 +201,7 @@ st.subheader("Citation Graph")
 if st.session_state.citation_graph is not None and st.session_state.root_id is not None:
     try:
         # Check if graph has nodes
+        print(f'{st.session_state.citation_graph.number_of_nodes()=}')
         if st.session_state.citation_graph.number_of_nodes() > 0:
             # Generate interactive graph
             fig = visualize_interactive(
@@ -201,7 +229,7 @@ else:
 if st.session_state.pdf_qa is not None and st.session_state.citation_graph is not None:
     with st.expander("📊 Graph Analysis", expanded=False):
         try:
-            GA = analyze_graph_structure(st.session_state.pdf_qa.G)
+            GA = analyze_graph_structure(st.session_state.pdf_qa.graph_retrieval.G)
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 st.metric("Nodes", GA.get('nodes', 0))
@@ -224,13 +252,13 @@ if st.session_state.pdf_qa is not None and st.session_state.citation_graph is no
 
             st.markdown("---")
             st.markdown("**🏆 Influential Papers (Top 5)**")
-            infl = find_influential_papers(st.session_state.pdf_qa.G, top_k=5)
+            infl = find_influential_papers(st.session_state.pdf_qa.graph_retrieval.G, top_k=5)
             for i, p in enumerate(infl, 1):
                 st.markdown(f"{i}. {p.get('title','N/A')} (Year: {p.get('publication_year','N/A')}, Citations: {p.get('cited_by_count',0)})")
 
             st.markdown("---")
             st.markdown("**📅 Temporal Trends**")
-            tt = find_temporal_trends(st.session_state.pdf_qa.G)
+            tt = find_temporal_trends(st.session_state.pdf_qa.graph_retrieval.G)
             if tt.get('years'):
                 years = tt['years']
                 st.markdown(f"Years covered: {min(years)} - {max(years)}")

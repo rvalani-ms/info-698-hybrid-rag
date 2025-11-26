@@ -2,13 +2,14 @@ import os
 import numpy as np
 from langchain_community.document_loaders import PyPDFDirectoryLoader
 from langchain_docling import DoclingLoader
-from docling.chunking import HybridChunker
+
 from langchain_chroma import Chroma
 from langchain_docling.loader import ExportType
+from sklearn.metrics.pairwise import cosine_similarity
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from .embedding import CustomEmbeddings
-from .graph_builder import GraphRetrival
+from embedding import CustomEmbeddings
+from graph_builder import GraphRetrieval
 from typing import List, Dict
 from collections import defaultdict
 from langchain_ollama import ChatOllama
@@ -81,7 +82,7 @@ class PDFQnA:
         # Initialize tracking attributes
         self.processed_pdfs = set()
 
-        self.graph_retrival = GraphRetrival()
+        self.graph_retrieval = GraphRetrieval()
 
         self.retrieval_cache = {}
         
@@ -127,6 +128,13 @@ class PDFQnA:
                 print("TITLE : ", title)
                 print("===========================")
 
+
+                # Set as root title if this is the first document
+                if not hasattr(self, 'root_title') or not self.root_title:
+                    self.root_title = title
+                    print(f"Set root title to: {title}")
+            
+
                 # Update metadata
                 for doc in l:
                     doc.metadata.update({"title": title})
@@ -164,6 +172,19 @@ class PDFQnA:
         if documents:
             print(f"Adding {len(documents)} documents to vector store")
             print(f"First document metadata: {documents[0].metadata}")
+
+            #   # If this is the first document and we have a root title, ensure it's in the graph
+            # if not hasattr(self, 'documents_added') and hasattr(self, 'root_title') and self.root_title:
+            #     root_id = f"uploaded_{hash(self.root_title) & 0xffffffff}"
+            #     if not self.graph_retrieval.G.has_node(root_id):
+            #         self.graph_retrieval.G.add_node(
+            #             root_id,
+            #             label=self.root_title,
+            #             title=self.root_title,
+            #             type="root",  # Changed from "uploaded_paper" to "root" to match existing code
+            #             is_root=True
+            #         )
+            #         print(f"Added root node for uploaded paper: {self.root_title}")
 
             # Split documents into chunks
             chunks = self.text_splitter.split_documents(documents)
@@ -558,78 +579,6 @@ class PDFQnA:
         }
         self.retrieval_cache[cache_key] = result
         return result
-
-    def get_system_stats(self) -> Dict[str, Any]:
-        """Get comprehensive system statistics with safe calculations."""
-        try:
-            # Safe graph statistics
-            graph_stats = {
-                "nodes": self.G.number_of_nodes(),
-                "edges": self.G.number_of_edges(),
-                "density": nx.density(self.G) if self.G.number_of_nodes() > 0 else 0.0,
-                "communities": len(self.communities) if hasattr(self, 'communities') else 0,
-                "avg_clustering": nx.average_clustering(self.G) if self.G.number_of_nodes() > 0 else 0.0
-            }
-        except Exception as e:
-            print(f"Warning: Error calculating graph stats: {e}")
-            graph_stats = {
-                "nodes": 0,
-                "edges": 0,
-                "density": 0.0,
-                "communities": 0,
-                "avg_clustering": 0.0
-            }
-        
-        try:
-            # Safe vector statistics
-            collection_size = 0
-            if hasattr(self, 'vectorstore') and self.vectorstore:
-                if hasattr(self.vectorstore, '_collection'):
-                    try:
-                        collection_size = self.vectorstore._collection.count()
-                    except:
-                        collection_size = 0
-            
-            vector_stats = {
-                "collection_size": collection_size,
-                "processed_pdfs": len(self.processed_pdfs) if hasattr(self, 'processed_pdfs') else 0
-            }
-        except Exception as e:
-            print(f"Warning: Error calculating vector stats: {e}")
-            vector_stats = {
-                "collection_size": 0,
-                "processed_pdfs": 0
-            }
-        
-        try:
-            # Safe cache statistics
-            cache_hits = getattr(self, 'cache_hits', 0)
-            cache_requests = getattr(self, 'cache_requests', 0)
-            
-            # Avoid division by zero
-            if cache_requests > 0:
-                cache_hit_rate = cache_hits / cache_requests
-            else:
-                cache_hit_rate = 0.0
-            
-            cache_stats = {
-                "cache_size": len(self.retrieval_cache) if hasattr(self, 'retrieval_cache') else 0,
-                "cache_hit_rate": cache_hit_rate
-            }
-        except Exception as e:
-            print(f"Warning: Error calculating cache stats: {e}")
-            cache_stats = {
-                "cache_size": 0,
-                "cache_hit_rate": 0.0
-            }
-        
-        stats = {
-            "graph_stats": graph_stats,
-            "vector_stats": vector_stats,
-            "cache_stats": cache_stats
-        }
-        
-        return stats
 
 
 if __name__ == "__main__":
