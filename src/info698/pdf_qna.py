@@ -19,7 +19,7 @@ import simplejson as json
 
 clean_title = lambda x : x.split("#")[2].strip()
 
-
+from tracing import *
 
 class PDFQnA:
     def __init__(self, model="llama3.2:3b", chunk_size: int = 4000, chunk_overlap: int = 100):

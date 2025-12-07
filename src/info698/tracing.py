@@ -4,12 +4,15 @@ try:
     if not os.environ.get("PHOENIX_COLLECTOR_ENDPOINT", None):
         # Fallback to local endpoint 
         os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:6006"
-
+        os.environ["PHOENIX_PROJECT_NAME"]="hybrid-rag-app"
     from phoenix.otel import register
         # Configuring phoenix tracing, for all llm calls 
     tracer_provider = register(
         project_name="hybrid-rag-app",
-        auto_instrument=True # Auto-instrument your app based on installed OI dependencies
+        auto_instrument=True, # Auto-instrument your app based on installed OI dependencies
+        # endpoint="http://localhost:6006/v1/traces",
+        set_global_tracer_provider=False,
+        batch=True,
     )
 
     print("INFO: Tracing enabled.")
