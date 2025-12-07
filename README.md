@@ -204,6 +204,14 @@ After starting either setup, access:
 - Model loading issues: Ensure Ollama service is running and accessible
 - Missing dependencies: Verify all packages in requirements.txt are installed
 
+## Citation Graph & Analysis
+
+  ![Citation Graph](./docs/citation-graph.png)
+  ![Graph Analysis](./docs/graph-analysis.png)
+
+## Tracing
+
+![Tracing](./docs/tracing.png)
 
 ## 📌 Sample Query Flow
 **User Uploads:** "Attention is All You Need"
