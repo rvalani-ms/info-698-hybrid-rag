@@ -7,19 +7,19 @@
 
 ## 📋 Table of Contents
 - [Overview](#overview)
-- [Features](#✨-features)
+- [Features](#-features)
 - [System Architecture](#system-architecture)
 - [Workflow](#workflow)
-- [Tech Stack](#🧑‍💻-tech-stack)
-- [Project Structure](#📂-project-structure)
+- [Tech Stack](#-tech-stack)
+- [Project Structure](#-project-structure)
 - [Installation & Setup](#-installation-and-setup)
-  - [Docker Setup](#🐳-docker-setup---recommended)
-  - [Local Setup](#💻-local-setup---without-docker)
-  - [Accessing Application](#🔄-accessing-the-application)
-- [Sample Query Flow](#📌-sample-query-flow)
-- [Future Work](#🔬-future-work)
-- [Team](#👥-team)
-- [Acknowledgements](#🙌-acknowledgements)
+  - [Docker Setup](#-docker-setup---recommended)
+  - [Local Setup](#-local-setup---without-docker)
+  - [Accessing Application](#-accessing-the-application)
+- [Sample Query Flow](#-sample-query-flow)
+- [Future Work](#-future-work)
+- [Team](#-team)
+- [Acknowledgements](#-acknowledgements)
 
 
 
