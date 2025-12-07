@@ -10,7 +10,7 @@
 - [Features](#-features)
 - [System Architecture](#system-architecture)
 - [Workflow](#workflow)
-- [Tech Stack](#-tech-stack)
+- [Tech Stack](#tech-stack)
 - [Project Structure](#-project-structure)
 - [Installation & Setup](#-installation-and-setup)
   - [Docker Setup](#-docker-setup---recommended)
@@ -78,7 +78,7 @@ The Graph RAG Powered Academic Assistant is an AI system designed to help studen
 -   Explainability Output
 
 
-## 🧑‍💻 Tech Stack
+## Tech Stack
 
 | Component | Technology |
 |----------|------------|
