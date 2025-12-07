@@ -208,10 +208,18 @@ After starting either setup, access:
 
 ## Citation Graph and Analysis
 
+The graph analysis module builds a citation network from ingested papers, computes structural metrics, and highlights the most influential nodes and communities. It surfaces top-cited or central papers, tracks temporal trends in publications, and visualizes how ideas propagate across years, helping users quickly identify key works and evolving research fronts.
+
   ![Citation Graph](./docs/citation-graph.png)
   ![Graph Analysis](./docs/graph-analysis.png)
 
 ## Tracing
+
+Using Phoenix tracing, we validated the full reasoning flow by:
+- Inspecting LLM calls and inputs
+- Verifying retrieval context passed to the LLM
+- Reviewing model outputs for groundedness
+- Checking cost, latency, and sequence of operations
 
 ![Tracing](./docs/tracing.png)
 
