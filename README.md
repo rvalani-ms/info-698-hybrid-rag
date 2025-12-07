@@ -16,6 +16,8 @@
   - [Docker Setup](#-docker-setup---recommended)
   - [Local Setup](#-local-setup---without-docker)
   - [Accessing Application](#-accessing-the-application)
+- [Citation Graph & Analysis](#citation-graph-and-analysis)
+- [Tracing](#tracing)
 - [Sample Query Flow](#-sample-query-flow)
 - [Future Work](#-future-work)
 - [Team](#-team)
@@ -204,7 +206,7 @@ After starting either setup, access:
 - Model loading issues: Ensure Ollama service is running and accessible
 - Missing dependencies: Verify all packages in requirements.txt are installed
 
-## Citation Graph & Analysis
+## Citation Graph and Analysis
 
   ![Citation Graph](./docs/citation-graph.png)
   ![Graph Analysis](./docs/graph-analysis.png)
